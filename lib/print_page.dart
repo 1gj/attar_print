@@ -1,10 +1,7 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'dart:convert';
-// استيراد المكتبات
-import 'package:bluetooth_print/bluetooth_print.dart';
-import 'package:bluetooth_print/bluetooth_print_model.dart';
-import 'package:permission_handler/permission_handler.dart'; // ضروري للصلاحيات
+import 'package:blue_thermal_printer/blue_thermal_printer.dart'; // المكتبة الجديدة
+import 'package:permission_handler/permission_handler.dart';
 
 class PrintPage extends StatefulWidget {
   final Uint8List imageBytes;
@@ -16,59 +13,57 @@ class PrintPage extends StatefulWidget {
 }
 
 class _PrintPageState extends State<PrintPage> {
-  BluetoothPrint bluetoothPrint = BluetoothPrint.instance;
+  BlueThermalPrinter bluetooth = BlueThermalPrinter.instance;
 
-  bool _connected = false;
+  List<BluetoothDevice> _devices = [];
   BluetoothDevice? _device;
+  bool _connected = false;
   String tips = 'جاري البحث عن الطابعة...';
 
   @override
   void initState() {
     super.initState();
-    // التأكد من اكتمال بناء الواجهة قبل طلب الإذن
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => initBluetoothWithPermissions());
+    WidgetsBinding.instance.addPostFrameCallback((_) => initBluetooth());
   }
 
-  // دالة جديدة لطلب الصلاحيات ثم البدء بالبحث
-  Future<void> initBluetoothWithPermissions() async {
-    // 1. طلب الصلاحيات الضرورية (بلوتوث + موقع)
-    // الموقع مطلوب في أندرويد لاكتشاف الأجهزة القريبة
-    Map<Permission, PermissionStatus> statuses = await [
+  Future<void> initBluetooth() async {
+    // طلب الصلاحيات
+    await [
       Permission.bluetooth,
       Permission.bluetoothScan,
       Permission.bluetoothConnect,
       Permission.location,
     ].request();
 
-    if (statuses[Permission.bluetoothScan]?.isGranted == false ||
-        statuses[Permission.bluetoothConnect]?.isGranted == false) {
-      setState(() {
-        tips = 'يرجى منح صلاحيات البلوتوث والموقع من الإعدادات';
-      });
-      return;
+    bool? isOn = await bluetooth.isOn;
+    if (isOn == true) {
+      try {
+        List<BluetoothDevice> devices = await bluetooth.getBondedDevices();
+        setState(() {
+          _devices = devices;
+          tips = devices.isEmpty
+              ? "لا توجد طابعات مقترنة. اذهب لإعدادات البلوتوث واقترن بالطابعة أولاً."
+              : "اختر الطابعة للاتصال:";
+        });
+      } catch (e) {
+        setState(() => tips = "خطأ: $e");
+      }
+    } else {
+      setState(() => tips = "البلوتوث مغلق");
     }
 
-    // 2. بدء البحث إذا تم منح الصلاحيات
-    bluetoothPrint.startScan(timeout: const Duration(seconds: 4));
-
-    bluetoothPrint.scanResults.listen((val) {
-      if (!mounted) return;
-      setState(() {});
-    });
-
-    bluetoothPrint.state.listen((state) {
+    bluetooth.onStateChanged().listen((state) {
       switch (state) {
-        case BluetoothPrint.CONNECTED:
+        case BlueThermalPrinter.CONNECTED:
           setState(() {
             _connected = true;
-            tips = 'تم الاتصال بنجاح - جاهز للطباعة';
+            tips = "تم الاتصال";
           });
           break;
-        case BluetoothPrint.DISCONNECTED:
+        case BlueThermalPrinter.DISCONNECTED:
           setState(() {
             _connected = false;
-            tips = 'تم قطع الاتصال';
+            tips = "تم قطع الاتصال";
           });
           break;
         default:
@@ -81,104 +76,64 @@ class _PrintPageState extends State<PrintPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('اتصال وطباعة'),
-        backgroundColor: Colors.green,
-        foregroundColor: Colors.white,
-      ),
+          title: const Text('طباعة الفاتورة'),
+          backgroundColor: Colors.green,
+          foregroundColor: Colors.white),
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(10.0),
-            child: Text(
-              tips,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-          ),
+              padding: const EdgeInsets.all(10),
+              child: Text(tips,
+                  style: const TextStyle(fontWeight: FontWeight.bold))),
           const Divider(),
           Expanded(
-            child: StreamBuilder<List<BluetoothDevice>>(
-              stream: bluetoothPrint.scanResults,
-              initialData: const [],
-              builder: (c, snapshot) {
-                if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-                  return ListView.builder(
-                    itemCount: snapshot.data!.length,
-                    itemBuilder: (context, index) {
-                      final d = snapshot.data![index];
-                      return Card(
-                        margin: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 5),
-                        child: ListTile(
-                          leading: Icon(Icons.print, color: Colors.blue[800]),
-                          title: Text(d.name ?? 'جهاز غير معروف'),
-                          subtitle: Text(d.address ?? ''),
-                          trailing: _device != null &&
-                                  _device!.address == d.address
-                              ? Icon(Icons.check_circle,
-                                  color:
-                                      _connected ? Colors.green : Colors.grey)
-                              : null,
-                          onTap: () async {
-                            setState(() {
-                              _device = d;
-                              tips = "جاري الاتصال بـ ${d.name}...";
-                            });
-                            await bluetoothPrint.connect(d);
-                          },
-                        ),
-                      );
-                    },
-                  );
-                } else {
-                  return const Center(
-                      child: Text("جاري البحث... تأكد أن الطابعة تعمل"));
-                }
+            child: ListView.builder(
+              itemCount: _devices.length,
+              itemBuilder: (context, index) {
+                return ListTile(
+                  leading: const Icon(Icons.print),
+                  title: Text(_devices[index].name ?? "غير معروف"),
+                  subtitle: Text(_devices[index].address ?? ""),
+                  trailing:
+                      _device?.address == _devices[index].address && _connected
+                          ? const Icon(Icons.check_circle, color: Colors.green)
+                          : null,
+                  onTap: () async {
+                    if (_connected) await bluetooth.disconnect();
+                    setState(() {
+                      _device = _devices[index];
+                      tips = "جاري الاتصال...";
+                    });
+                    await bluetooth.connect(_devices[index]);
+                  },
+                );
               },
             ),
           ),
-          Container(
+          Padding(
             padding: const EdgeInsets.all(20),
-            width: double.infinity,
             child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _connected ? Colors.green[700] : Colors.grey,
-                padding: const EdgeInsets.symmetric(vertical: 15),
-                foregroundColor: Colors.white,
-              ),
               icon: const Icon(Icons.print),
-              label: const Text("طباعة الفاتورة الآن",
-                  style: TextStyle(fontSize: 18)),
-              onPressed: _connected ? _printNow : null,
+              label: const Text("طباعة الآن"),
+              onPressed: _connected ? _printImage : null,
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: _connected ? Colors.green : Colors.grey,
+                  foregroundColor: Colors.white),
             ),
-          ),
+          )
         ],
       ),
     );
   }
 
-  Future<void> _printNow() async {
-    Map<String, dynamic> config = {};
-    config['width'] = 380; // عرض مناسب للطابعات الصغيرة 58mm
-    config['height'] = 600;
-    config['gap'] = 2;
-
-    List<LineText> list = [];
-    String base64Image = base64Encode(widget.imageBytes);
-
-    list.add(LineText(
-      type: LineText.TYPE_IMAGE,
-      content: base64Image,
-      align: LineText.ALIGN_CENTER,
-      linefeed: 1,
-      width: 380,
-    ));
-    list.add(LineText(linefeed: 1));
-
-    await bluetoothPrint.printReceipt(config, list);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("تم إرسال الأمر للطابعة")));
+  Future<void> _printImage() async {
+    if (_device == null) return;
+    if ((await bluetooth.isConnected) == true) {
+      // طباعة الصورة
+      await bluetooth.printImageBytes(widget.imageBytes);
+      // قص الورقة
+      await bluetooth.printNewLine();
+      await bluetooth.printNewLine();
     }
   }
 }

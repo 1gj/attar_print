@@ -23,18 +23,33 @@ tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
 
-// --- كود إصلاح Namespace للمكتبات القديمة (Kotlin DSL) ---
+// --- كود إصلاح Namespace للمكتبات القديمة (مصحح وشامل) ---
 subprojects {
-    afterEvaluate {
-        // البحث عن إعدادات الأندرويد داخل المكتبة
+    val configureNamespace = {
         val android = extensions.findByName("android")
         // التأكد من أنها مكتبة أندرويد
         if (android != null && android is BaseExtension) {
-            // إذا لم يكن للمكتبة اسم تعريفي (Namespace)
-            if (android.namespace == null) {
-                // نمنحها اسماً افتراضياً لكي يقبلها النظام
-                android.namespace = "com.bayt_al_attar.${project.name}"
+            
+            // [إصلاح خاص] لمكتبة blue_thermal_printer
+            // نعطيها اسمها الأصلي لمنع التعارض مع ملف Manifest
+            if (project.name == "blue_thermal_printer") {
+                android.namespace = "id.kakzaki.blue_thermal_printer"
             }
+            
+            // باقي المكتبات التي ليس لها اسم، نعطيها اسماً افتراضياً
+            else if (android.namespace == null) {
+                val validNamespace = "com.bayt_al_attar.${project.name.replace("-", "_")}"
+                android.namespace = validNamespace
+            }
+        }
+    }
+
+    // تنفيذ الإصلاح سواء تم تقييم المشروع أم لا (لتجنب أخطاء التوقيت)
+    if (state.executed) {
+        configureNamespace()
+    } else {
+        afterEvaluate {
+            configureNamespace()
         }
     }
 }

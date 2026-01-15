@@ -116,11 +116,13 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 5),
 
+            // تم تصحيح العرض هنا ليكون آمناً
             Screenshot(
               controller: screenshotController,
               child: Container(
-                width: 380, // عرض الورقة
-                padding: const EdgeInsets.all(16),
+                width: 370, // جعلناه أقل قليلاً من 384 لضمان الهوامش
+                padding:
+                    const EdgeInsets.all(10), // تقليل الحواش الداخلية قليلاً
                 decoration: BoxDecoration(
                   color: Colors.white,
                   border: Border.all(color: Colors.black12),
@@ -131,19 +133,21 @@ class _HomeScreenState extends State<HomeScreen> {
                     const Text(
                       "عطارة بيت العطار",
                       style: TextStyle(
-                        fontSize: 24,
+                        fontSize: 22, // تقليل الخط قليلاً ليتناسب
                         fontWeight: FontWeight.bold,
+                        color: Colors.black,
                       ),
                     ),
                     const Text(
                       "ناصرية - سوق سيد سعد",
-                      style: TextStyle(fontSize: 14),
+                      style: TextStyle(fontSize: 14, color: Colors.black),
                     ),
                     const Text(
                       "07726860085",
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
+                        color: Colors.black,
                       ),
                     ),
                     const Divider(thickness: 2, color: Colors.black),
@@ -155,10 +159,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Text(
                             "الزبون: ${nameController.text}",
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black),
                           ),
-                          Text("الهاتف: ${phoneController.text}"),
-                          Text("العنوان: ${addressController.text}"),
+                          Text("الهاتف: ${phoneController.text}",
+                              style: const TextStyle(color: Colors.black)),
+                          Text("العنوان: ${addressController.text}",
+                              style: const TextStyle(color: Colors.black)),
                           Text(
                             "التاريخ: ${intl.DateFormat('yyyy-MM-dd h:mm a').format(DateTime.now())}",
                             style: const TextStyle(
@@ -169,20 +177,22 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
                     ),
-                    const Divider(),
+                    const Divider(color: Colors.black),
 
                     const Align(
                       alignment: Alignment.centerRight,
                       child: Text(
                         "المواد:",
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, color: Colors.black),
                       ),
                     ),
                     Align(
                       alignment: Alignment.centerRight,
                       child: Text(
                         itemsController.text,
-                        style: const TextStyle(fontSize: 16),
+                        style:
+                            const TextStyle(fontSize: 16, color: Colors.black),
                       ),
                     ),
 
@@ -196,6 +206,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
+                            color: Colors.black,
                           ),
                         ),
                         Text(
@@ -203,10 +214,12 @@ class _HomeScreenState extends State<HomeScreen> {
                           style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
+                            color: Colors.black,
                           ),
                         ),
                       ],
                     ),
+                    const SizedBox(height: 10), // مسافة أمان في الأسفل
                   ],
                 ),
               ),
@@ -217,14 +230,14 @@ class _HomeScreenState extends State<HomeScreen> {
             // --- زر الانتقال للطباعة ---
             ElevatedButton.icon(
               onPressed: () async {
-                // 1. التقاط الصورة
-                // pixelRatio: 2.5 تعني مضاعفة الدقة مرتين ونصف لتكون واضحة جداً كالكريستال
+                // [الحل الجذري]
+                // تغيير pixelRatio إلى 1.0 أو 1.2 كحد أقصى
+                // هذا يجعل حجم الصورة مناسباً لذاكرة الطابعة (حوالي 380 بكسل)
                 final image = await screenshotController.capture(
-                  pixelRatio: 2.5,
+                  pixelRatio: 1.0,
                 );
 
                 if (image != null && context.mounted) {
-                  // 2. الانتقال لصفحة الطباعة مع الصورة
                   Navigator.push(
                     context,
                     MaterialPageRoute(
