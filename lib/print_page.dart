@@ -1,10 +1,10 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'dart:convert';
-
-// استيراد المكتبة الأصلية (وليس plus)
+// استيراد المكتبات
 import 'package:bluetooth_print/bluetooth_print.dart';
 import 'package:bluetooth_print/bluetooth_print_model.dart';
+import 'package:permission_handler/permission_handler.dart'; // ضروري للصلاحيات
 
 class PrintPage extends StatefulWidget {
   final Uint8List imageBytes;
@@ -25,10 +25,31 @@ class _PrintPageState extends State<PrintPage> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => initBluetooth());
+    // التأكد من اكتمال بناء الواجهة قبل طلب الإذن
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => initBluetoothWithPermissions());
   }
 
-  Future<void> initBluetooth() async {
+  // دالة جديدة لطلب الصلاحيات ثم البدء بالبحث
+  Future<void> initBluetoothWithPermissions() async {
+    // 1. طلب الصلاحيات الضرورية (بلوتوث + موقع)
+    // الموقع مطلوب في أندرويد لاكتشاف الأجهزة القريبة
+    Map<Permission, PermissionStatus> statuses = await [
+      Permission.bluetooth,
+      Permission.bluetoothScan,
+      Permission.bluetoothConnect,
+      Permission.location,
+    ].request();
+
+    if (statuses[Permission.bluetoothScan]?.isGranted == false ||
+        statuses[Permission.bluetoothConnect]?.isGranted == false) {
+      setState(() {
+        tips = 'يرجى منح صلاحيات البلوتوث والموقع من الإعدادات';
+      });
+      return;
+    }
+
+    // 2. بدء البحث إذا تم منح الصلاحيات
     bluetoothPrint.startScan(timeout: const Duration(seconds: 4));
 
     bluetoothPrint.scanResults.listen((val) {
@@ -137,8 +158,8 @@ class _PrintPageState extends State<PrintPage> {
 
   Future<void> _printNow() async {
     Map<String, dynamic> config = {};
-    config['width'] = 100;
-    config['height'] = 150;
+    config['width'] = 380; // عرض مناسب للطابعات الصغيرة 58mm
+    config['height'] = 600;
     config['gap'] = 2;
 
     List<LineText> list = [];
@@ -149,7 +170,7 @@ class _PrintPageState extends State<PrintPage> {
       content: base64Image,
       align: LineText.ALIGN_CENTER,
       linefeed: 1,
-      width: 800,
+      width: 380,
     ));
     list.add(LineText(linefeed: 1));
 
